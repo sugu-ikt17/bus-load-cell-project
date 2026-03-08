@@ -1,0 +1,108 @@
+#include <HX711.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+#define DT 3
+#define SCK 2
+
+#define IN1 8
+#define IN2 9
+#define ENA 6
+#define BUZZER 7
+
+HX711 scale;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+float calibration_factor = 15000;
+
+unsigned long detectStart = 0;
+bool timing = false;
+bool slowed = false;
+
+void setup() {
+
+  Serial.begin(9600);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(ENA, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  analogWrite(ENA, 255);
+
+  scale.begin(DT, SCK);
+  scale.set_scale(calibration_factor);
+  scale.tare();
+
+  lcd.init();
+  lcd.backlight();
+
+  lcd.setCursor(0,0);
+  lcd.print("Bus System");
+  lcd.setCursor(0,1);
+  lcd.print("Waiting...");
+}
+
+void loop() {
+
+  float weight = abs(scale.get_units(5));
+  Serial.println(weight);
+
+  if(weight >= 5) {
+
+    if(!timing) {
+      detectStart = millis();
+      timing = true;
+    }
+
+    int remaining = 10 - ((millis() - detectStart) / 1000);
+
+    lcd.setCursor(0,0);
+    lcd.print("Step Into Bus  ");
+
+    if(remaining > 0) {
+
+      digitalWrite(BUZZER, HIGH);   // buzzer ON
+
+      lcd.setCursor(0,1);
+      lcd.print("Wait ");
+      lcd.print(remaining);
+      lcd.print(" sec   ");
+
+    } 
+    else {
+
+      digitalWrite(BUZZER, LOW);    // buzzer OFF
+
+      if(!slowed) {
+        analogWrite(ENA, 120);      // motor slow
+        slowed = true;
+      }
+
+      lcd.setCursor(0,1);
+      lcd.print("Bus Slowing    ");
+    }
+
+  }
+  else {
+
+    digitalWrite(BUZZER, LOW);
+
+    timing = false;
+
+    if(slowed) {
+      analogWrite(ENA, 255);
+      slowed = false;
+    }
+
+    lcd.setCursor(0,0);
+    lcd.print("Bus System     ");
+    lcd.setCursor(0,1);
+    lcd.print("Waiting...     ");
+  }
+
+  delay(200);
+}
